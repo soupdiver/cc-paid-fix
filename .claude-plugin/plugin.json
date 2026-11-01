@@ -1,0 +1,8 @@
+{
+  "name": "cc-paid-fix",
+  "version": "0.1.0",
+  "description": "Delegate one-off tasks to a separate claude -p run billed to an API key, with context handoffs and budget controls.",
+  "author": { "name": "soupdiver" },
+  "repository": "https://github.com/soupdiver/cc-paid-fix",
+  "keywords": ["api", "credits", "claude-code"]
+}

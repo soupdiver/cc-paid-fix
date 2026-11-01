@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: focused-review
+expected_outcome: |
+  A local dry-run plan with a concise context handoff retaining SQLite and the
+  no-Redis constraint, Opus/high effort, budget 3, and no editing or shell tools.

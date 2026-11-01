@@ -1,0 +1,12 @@
+{
+  "name": "cc-paid-fix",
+  "description": "Marketplace for the cc-paid-fix plugin.",
+  "owner": { "name": "soupdiver" },
+  "plugins": [
+    {
+      "name": "cc-paid-fix",
+      "source": "./",
+      "description": "Delegate one-off tasks to an API-key-billed claude -p run from your normal Claude Code chat."
+    }
+  ]
+}
