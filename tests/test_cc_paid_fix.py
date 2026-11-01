@@ -135,11 +135,68 @@ class RunnerTests(unittest.TestCase):
         for path in folder.iterdir():
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600, str(path))
 
+    def no_env_key(self):
+        return {k: v for k, v in self.env.items() if k != "CLAUDE_CREDITS_API_KEY"}
+
+    def test_setup_stores_key_in_private_file_and_run_uses_it(self):
+        key = "sk-test-" + "a" * 30
+        env = self.no_env_key()
+        result = subprocess.run([sys.executable, str(SCRIPT), "setup"], input=key + "\n", capture_output=True,
+                                text=True, cwd=self.directory, env=env, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["stored_in"], "file")
+        self.assertNotIn(key, result.stdout + result.stderr)
+        path = self.home / "key"
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        _, doctor = self.invoke("doctor", env=env)
+        self.assertEqual(doctor["key_source"], "file")
+        self.assertNotIn(key, json.dumps(doctor))
+        result, _ = self.invoke("run", {"task": "Review"}, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.capture.read_text())["auth"], key)
+
+    def test_env_key_wins_over_stored_key(self):
+        self.home.mkdir(mode=0o700)
+        (self.home / "key").write_text("sk-test-" + "b" * 30)
+        (self.home / "key").chmod(0o600)
+        _, doctor = self.invoke("doctor")
+        self.assertEqual(doctor["key_source"], "env")
+
+    def test_setup_rejects_malformed_key_and_stores_nothing(self):
+        for bad in ["", "short", "has space " + "x" * 30, "quote\"" + "x" * 30, "semi;colon" + "x" * 30]:
+            with self.subTest(bad=bad):
+                result = subprocess.run([sys.executable, str(SCRIPT), "setup"], input=bad + "\n",
+                                        capture_output=True, text=True, cwd=self.directory,
+                                        env=self.no_env_key(), timeout=15)
+                self.assertEqual(result.returncode, 2)
+                self.assertFalse((self.home / "key").exists())
+
+    def test_group_readable_key_file_is_refused(self):
+        self.home.mkdir(mode=0o700)
+        (self.home / "key").write_text("sk-test-" + "c" * 30)
+        (self.home / "key").chmod(0o644)
+        result, _ = self.invoke("run", {"task": "Review"}, env=self.no_env_key())
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("chmod 600", result.stderr)
+        self.assertFalse(self.capture.exists())
+
+    def test_logout_removes_stored_key(self):
+        self.home.mkdir(mode=0o700)
+        (self.home / "key").write_text("sk-test-" + "d" * 30)
+        (self.home / "key").chmod(0o600)
+        result, out = self.invoke("logout", env=self.no_env_key())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(out["removed_from"], ["file"])
+        self.assertFalse((self.home / "key").exists())
+        _, doctor = self.invoke("doctor", env=self.no_env_key())
+        self.assertFalse(doctor["key_present"])
+
     def test_missing_dedicated_key_never_falls_back(self):
         env = {k: v for k, v in self.env.items() if k != "CLAUDE_CREDITS_API_KEY"}
         result, _ = self.invoke("run", {"task": "Review"}, env=env)
         self.assertEqual(result.returncode, 2)
         self.assertIn("CLAUDE_CREDITS_API_KEY", result.stderr)
+        self.assertIn("setup", result.stderr)
         self.assertFalse(self.capture.exists())
         self.assertFalse(self.home.exists())
 

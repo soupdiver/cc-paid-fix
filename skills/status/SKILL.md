@@ -20,5 +20,5 @@ is cumulative per worker conversation, so don't sum it across follow-ups.
 still be running and billing. Report it; don't kill processes yourself. Local
 estimates are not the Console credit balance. For the real
 remaining promotional balance, point to https://platform.claude.com/settings/billing.
-Never print or request credentials. The key is CLAUDE_CREDITS_API_KEY, deliberately
+Never print or request credentials. The key comes from CLAUDE_CREDITS_API_KEY, the Keychain or the key file (`setup`), deliberately
 not ANTHROPIC_API_KEY, so normal interactive chat keeps its existing billing.

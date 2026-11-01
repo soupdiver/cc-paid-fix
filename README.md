@@ -21,13 +21,22 @@ Requires macOS or Linux, Python 3.9+ and Claude Code 2.1.286+.
 
 ## Install
 
-Set the key in your shell **before** starting Claude. Don't paste it into the chat,
-and don't set `ANTHROPIC_API_KEY` for your normal session.
+Store a dedicated Console API key once. Use a key with a spend limit, and don't
+paste it into the chat.
 
 ```bash
-export CLAUDE_CREDITS_API_KEY=...
-claude
+python3 scripts/cc_paid_fix.py setup    # hidden prompt; stored in the macOS Keychain, else ~/.claude/credits/key (0600)
 ```
+
+From inside Claude Code you can run the same command with the `!` prefix, using
+the plugin's install path. If there is no terminal, pipe the key in:
+`pbpaste | python3 scripts/cc_paid_fix.py setup`.
+
+The runner looks for the key in this order: the `CLAUDE_CREDITS_API_KEY`
+environment variable, the Keychain entry `cc-paid-fix` (macOS, default state
+directory only), then the key file. `doctor` shows which source is used, never
+the value. `logout` deletes the stored key; an exported variable is not affected.
+Don't set `ANTHROPIC_API_KEY` for your normal session.
 
 Then, inside Claude Code:
 
@@ -56,7 +65,7 @@ If the commands don't show up, restart Claude or run `/reload-plugins`.
 - `followup` resumes that specific worker with the same permissions and gives it
   a new run ID.
 - `status` runs `doctor` and `list` locally, without an API call. `doctor` checks
-  the CLI version, whether the key is set, and whether the CLI flags the runner
+  the CLI version, whether a key is found and from where, and whether the CLI flags the runner
   needs are present.
 
 The runner can also be used directly:

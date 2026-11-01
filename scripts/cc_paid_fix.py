@@ -10,6 +10,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import getpass
 import json
 import math
 import os
@@ -163,10 +164,80 @@ def validate(data, followup=False):
     return options
 
 
-def child_environment():
+KEY_SERVICE = "cc-paid-fix"
+KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,}$")
+
+
+def key_file():
+    return state_root() / "key"
+
+
+def keychain_enabled():
+    # A custom state directory (CLAUDE_CREDITS_HOME) keeps everything in that directory.
+    return sys.platform == "darwin" and shutil.which("security") and "CLAUDE_CREDITS_HOME" not in os.environ
+
+
+def find_key():
+    """Return (key, source). Order: environment variable, macOS Keychain, key file."""
     key = os.environ.get("CLAUDE_CREDITS_API_KEY", "").strip()
+    if key:
+        return key, "env"
+    if keychain_enabled():
+        found = subprocess.run(["security", "find-generic-password", "-s", KEY_SERVICE, "-a", KEY_SERVICE, "-w"],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=10)
+        if found.returncode == 0 and found.stdout.strip():
+            return found.stdout.strip(), "keychain"
+    path = key_file()
+    if path.is_file():
+        if path.stat().st_mode & 0o077:
+            raise ValueError(f"{path} must not be readable by others; run: chmod 600 {path}")
+        return path.read_text().strip(), "file"
+    return "", "none"
+
+
+def read_new_key():
+    key = (getpass.getpass("API key (input hidden): ") if sys.stdin.isatty() else sys.stdin.readline()).strip()
+    if not KEY_PATTERN.match(key):
+        raise ValueError("That doesn't look like an API key (expected letters, digits, '-' or '_').")
+    return key
+
+
+def store_key(key):
+    """Store the key for this plugin only. The key never appears on a command line."""
+    if keychain_enabled():
+        # `security -i` reads commands from stdin, so the key is not visible in `ps`.
+        # KEY_PATTERN guarantees the key has no characters that need quoting.
+        script = f"add-generic-password -s {KEY_SERVICE} -a {KEY_SERVICE} -U -w {key}\n"
+        done = subprocess.run(["security", "-i"], input=script, capture_output=True, text=True, timeout=20)
+        if done.returncode == 0 and "error" not in (done.stdout + done.stderr).lower():
+            key_file().unlink(missing_ok=True)
+            return "keychain"
+    private_dir(state_root())
+    fd = os.open(key_file(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(key + "\n")
+    key_file().chmod(0o600)
+    return "file"
+
+
+def delete_key():
+    removed = []
+    if keychain_enabled():
+        gone = subprocess.run(["security", "delete-generic-password", "-s", KEY_SERVICE, "-a", KEY_SERVICE],
+                              capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=10)
+        if gone.returncode == 0:
+            removed.append("keychain")
+    if key_file().is_file():
+        key_file().unlink()
+        removed.append("file")
+    return removed
+
+
+def child_environment():
+    key, _ = find_key()
     if not key:
-        raise ValueError("Set CLAUDE_CREDITS_API_KEY in your shell before starting Claude. Do not paste it into chat.")
+        raise ValueError("No API key found. Run `setup` once (type: ! python3 <plugin>/scripts/cc_paid_fix.py setup), "
+                         "or set CLAUDE_CREDITS_API_KEY in your shell before starting Claude. Do not paste it into chat.")
     env = {k: v for k, v in os.environ.items()
            if not k.startswith("ANTHROPIC_") and not k.startswith("CLAUDE_CODE_USE_")
            and k not in {"CLAUDECODE", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CREDITS_API_KEY"}}
@@ -411,15 +482,20 @@ def execute_task(options):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["run", "followup", "doctor", "list", "show"])
+    parser.add_argument("action", choices=["run", "followup", "doctor", "list", "show", "setup", "logout"])
     parser.add_argument("run_id", nargs="?")
     parser.add_argument("--dry-run", action="store_true", help="Show execution plan without credentials, writes or API calls")
     args = parser.parse_args()
     try:
-        if args.action == "doctor":
+        if args.action == "setup":
+            result = {"stored_in": store_key(read_new_key()), "api_called": False}
+        elif args.action == "logout":
+            result = {"removed_from": delete_key(), "note": "An exported CLAUDE_CREDITS_API_KEY is not affected."}
+        elif args.action == "doctor":
             executable, version = cli_version()
+            _, key_source = find_key()
             result = {"claude": executable, "version": version,
-                      "key_present": bool(os.environ.get("CLAUDE_CREDITS_API_KEY", "").strip()),
+                      "key_present": key_source != "none", "key_source": key_source,
                       "state_directory": str(state_root()), "api_called": False,
                       "flags_missing_from_help": missing_flags(executable),
                       "flags_note": "Flags the runner passes but `claude --help` doesn't list. "
@@ -441,7 +517,7 @@ def main():
             if args.dry_run:
                 result = {"command": command(options, "<new-worker-session>"),
                           "prompt": prompt(options), "api_called": False,
-                          "credential_source": "CLAUDE_CREDITS_API_KEY (child only)"}
+                          "credential_source": "CLAUDE_CREDITS_API_KEY, keychain or key file (child only)"}
             else:
                 result = execute_task(options)
         print(json.dumps(result, indent=2, ensure_ascii=False))
