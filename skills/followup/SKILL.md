@@ -13,7 +13,7 @@ explicit `budget_usd`, `model`, or `effort` override. Strings must be JSON-encod
 not shell-interpolated. If the run ID or question is absent, ask; do not guess
 using Claude's global `--continue`. The runner resumes that worker session only,
 in the original run's working directory, retains its tool permissions, and gives
-this invocation a new run ID. Each invocation has its own estimated budget
+this invocation a new run ID. Each invocation has its own budget
 (default: the previous run's budget). Whether the CLI checks that budget against
 this invocation or the worker's cumulative cost is unverified: if a follow-up
 stops at once as `incomplete` with `error_max_budget_usd`, say so rather than

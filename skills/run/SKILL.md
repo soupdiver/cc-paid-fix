@@ -17,7 +17,7 @@ Run the requested task using this runner, not a native subagent (native subagent
 would use this chat's billing). This is an explicitly user-invoked paid operation.
 
 1. If no task was supplied, ask what to delegate; do not start a paid run.
-2. Default to Opus, high effort, a $10 **estimated** budget, and read-only tools.
+2. Default to Opus, high effort, a $10 budget, and read-only tools.
    Honor explicit `--budget`, `--model`, and `--effort` choices. Recognize
    `--full-context` as `context: "full"`, `--fresh` as `context: "none"`,
    `--edit` as `edit: true`, and `--allow-bash` as `allow_bash: true`.
@@ -35,7 +35,7 @@ would use this chat's billing). This is an explicitly user-invoked paid operatio
    transcript without continuing or modifying the parent. Warn that this sends
    the saved conversation to the API and can cost more. It is not live memory.
    For `none`, omit the handoff. Full/fresh still receive the explicit task.
-4. Briefly state the model, budget estimate, context mode and permissions. Invoke
+4. Briefly state the model, budget, context mode and permissions. Invoke
    the runner via Bash, sending one JSON object on stdin using a **quoted heredoc**
    and a delimiter absent from the JSON. JSON-encode the strings; do not put the
    user's text or API key in shell command interpolation or command arguments.

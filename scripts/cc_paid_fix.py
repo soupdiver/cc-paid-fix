@@ -443,7 +443,7 @@ def execute_task(options):
             with (folder / "response.json").open("w") as stdout, (folder / "stderr.txt").open("w") as stderr:
                 os.chmod(stdout.name, 0o600)
                 os.chmod(stderr.name, 0o600)
-                print(f"cc-paid-fix: {run_id} · {options['model']} · ${options['budget_usd']} estimated budget", file=sys.stderr)
+                print(f"cc-paid-fix: {run_id} · {options['model']} · ${options['budget_usd']} budget", file=sys.stderr)
                 # A Bash-tool timeout or cancellation sends SIGTERM/SIGHUP, not Ctrl-C.
                 handlers = {sig: signal.signal(sig, terminated) for sig in SIGNALS}
                 try:
